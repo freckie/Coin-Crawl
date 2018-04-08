@@ -170,7 +170,7 @@ def loop(driver, bot, timer, words1, words2, words3):
 
 if __name__ == "__main__":
     # 설정 데이터 읽기
-    file = open("data.ini", 'r')
+    file = open("notice_setting.ini", 'r')
     lines = file.readlines()
 
     driver_location = lines[1].replace("\n", "")
