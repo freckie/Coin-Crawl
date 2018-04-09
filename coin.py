@@ -4,20 +4,24 @@ import telegram
 from time import sleep
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
 
 my_token = ''
 channel_id = ''
-already_checked = {'bithumb':'', 'upbit':'', 'binance':''} # 이미 체크한 공지들
 driver_location = ""
 delay_timer = 10
 msg_format = ""
 start_timer = 15
+msg_timer = 0.5
 
 
 def _message(bot, site, message):
     msg = msg_format.replace("$message", message).replace("$site", site).replace("%enter", "\n")
-    bot.sendMessage(chat_id=channel_id, text=msg)
-    print("[SYSTEM] Telegram Message 전송 완료.")
+    try:
+        bot.sendMessage(chat_id=channel_id, text=msg)
+        sleep(msg_timer)
+    except:
+        print("[ERROR] Telegram Message 전송 실패! (메세지 : " + msg + ")")
 
 
 def _get_upbit_avail():
@@ -50,41 +54,72 @@ def _print_upbit_avail(upbit_avail):
 
 
 def coins_upbit(driver, bot, upbit_init):
-    url = "https://www.upbit.com/trends"
-    driver.get(url)
-    driver.find_element_by_xpath('//*[@id="root"]/div/div/div[3]/section[1]/article[2]/a').click()
-
-    # 버튼 클릭된 이후의 table 크롤링
-    html = driver.page_source
-    bs = BeautifulSoup(html, 'html.parser')
-    table = bs.select("table.ty03")[1].find("tbody")
-    tr_tags = table.find_all("tr")
+    driver.refresh()
+    sleep(3)
 
     # 파일에 이전 데이터 읽어오기
     upbit_avail = _get_upbit_avail()
+    now_list_u = []
+    now_list_u.clear()
 
-    idx = 1
-    # 버튼이 있는 코인 이름들만 리스트에 추가
-    for tr_tag in tr_tags:
-        name = tr_tag.select("a.tit > strong")[0].getText()
-        btn = tr_tag.select("a.btn03")
-
-        # 새로 추가된 코인
-        if btn:
-            if name not in upbit_avail:
-                if upbit_init:  # 초기데이터 저장된 상태라면
-                    _message(bot, "upbit", name + " 상장.")
-                    upbit_avail.append(name)
+    try:
+        bs = BeautifulSoup(driver.page_source, "html.parser")
+        div = bs.find("section", class_="ty02").find("div", class_="scrollB").find("table")
+        trs = div.find_all("tr")
+        for tr in trs:
+            name = tr.find('td', class_='tit').find('a').get_text().strip()
+            short = tr.find('td', class_='tit').find('em').get_text().strip()
+            temp = {
+                'name': name,
+                'symbol': short,
+            }
+            # 새로운 데이터라면
+            if temp['symbol'] not in upbit_avail:
+                # 초기화 중이 아니라면
+                if upbit_init:
+                    msg = temp['name'] + " (" + temp['symbol'] + ") 상장."
+                    _message(bot, "UpBit", msg)
+                    upbit_avail.append(temp['symbol'])
                 else:
-                    upbit_avail.append(name)
-        # 없어진 코인
-        else:
-            if name in upbit_avail:
-                if name == "퀀텀":
-                    continue
-                _message(bot, "upbit", name + " 폐장.")
-                upbit_avail.remove(name)
-        idx+=1
+                    upbit_avail.append(temp['symbol'])
+            now_list_u.append(temp['symbol'])
+
+        driver.find_element_by_xpath('//*[@id="root"]/div/div/div[3]/section[2]/article[1]/span[2]/ul/li[2]/a').click()
+
+        sleep(3)
+
+        bs = BeautifulSoup(driver.page_source, "html.parser")
+        div = bs.find("section", class_="ty02").find("div", class_="scrollB").find("table")
+        trs = div.find_all("tr")
+        for tr in trs:
+            name = tr.find('td', class_='tit').find('a').get_text().strip()
+            short = tr.find('td', class_='tit').find('em').get_text().strip()
+            temp = {
+                'name': name,
+                'symbol': short
+            }
+            # 새로운 데이터라면
+            if temp['symbol'] not in upbit_avail:
+                # 초기화 중이 아니라면
+                if upbit_init:
+                    msg = temp['name'] + " (" + temp['symbol'] + ") 상장."
+                    _message(bot, "UpBit", msg)
+                    upbit_avail.append(temp['symbol'])
+                else:
+                    upbit_avail.append(temp['symbol'])
+            now_list_u.append(temp['symbol'])
+
+    except TimeoutException:
+        print("[ERROR] Loading took too much time!")
+    except:
+        print("[ERROR] Unknown Error")
+
+    # 폐장된 데이터 확인
+    del_data = list(set(upbit_avail).difference(set(now_list_u)))
+    for iter in del_data:
+        msg = iter + " 거래소에서 제외됨 (폐장)."
+        _message(bot, "UpBit", msg)
+        upbit_avail.remove(str(iter))
 
     # 파일에 데이터 저장
     _print_upbit_avail(upbit_avail)
@@ -92,7 +127,7 @@ def coins_upbit(driver, bot, upbit_init):
 
 
 def _get_binance_avail():
-    binance_avail = []
+    binance_avail = list()
     # 데이터 읽기
     try:
         file = open("binance_coins.dat", 'r')
@@ -101,13 +136,8 @@ def _get_binance_avail():
 
     data_list = file.readlines()
     for data in data_list:
-        temp = data.replace("\n", "").split(" ")
-        tmp_dict = {
-            'symbol': temp[0],
-            'quote': temp[1],
-            'base': temp[2]
-        }
-        binance_avail.append(tmp_dict)
+        temp = data.replace("\n", "")
+        binance_avail.append(temp)
 
     file.close()
 
@@ -118,18 +148,16 @@ def _print_binance_avail(binance_avail):
     # 데이터 쓰기
     file = open("binance_coins.dat", "w", encoding="utf-8")
     for item in binance_avail:
-        file.write(item['symbol'] + " " + item['quote'] + " " + item['base'] + "\n")
+        file.write(item + "\n")
     file.close()
 
     return True
 
 
-def coins_binance(bot, binance_init):
+def coins_binance(bot, _binance_init):
     # 파일에 이전 데이터 가져오기
-    binance_avail = _get_binance_avail()
-    symbol_list = []
-    for item in binance_avail:
-        symbol_list.append(item['symbol'])
+    _binance_avail = _get_binance_avail()
+    now_list = []
 
     # ID를 가져오기 위한 json parsing
     headers = {"Content-Type": "application/json; charset=utf-8"}
@@ -144,17 +172,27 @@ def coins_binance(bot, binance_init):
             "base": data['baseAssetName'].replace(" ", "_")
         }
         # 초기 구성 중이라면
-        if not binance_init:
-            binance_avail.append(temp)
+        if not _binance_init:
+            _binance_avail.append(temp['symbol'])
+            now_list.append(temp['symbol'])
         # 초기 구성 완료된 상태라면
         else:
             # 새로운 데이터
-            if temp['symbol'] not in symbol_list:
-                msg = temp['symbol'] + "(" + temp['quote'] + " - " + temp['base'] + ") 거래 가능."
-                _message(bot, "binance", msg)
-                binance_avail.append(temp)
+            if temp['symbol'] not in _binance_avail:
+                msg = temp['symbol'] + "(" + temp['quote'] + " - " + temp['base'] + ") 거래 가능. (상장)"
+                _message(bot, "Binance", msg)
+                _binance_avail.append(temp['symbol'])
 
-    _print_binance_avail(binance_avail)
+        now_list.append(temp['symbol'])
+
+    # 폐장된 데이터 확인
+    del_data = list(set(_binance_avail).difference(set(now_list)))
+    for iter in del_data:
+        msg = iter + " 거래소에서 제외됨 (폐장)."
+        _message(bot, "Binance", msg)
+        _binance_avail.remove(str(iter))
+
+    _print_binance_avail(_binance_avail)
     return True
 
 
@@ -169,22 +207,24 @@ if __name__ == "__main__":
     delay_timer = int(lines[7].replace("\n", ""))
     msg_format = lines[9]
     start_timer = int(lines[11].replace("\n", ""))
-    program_mode = lines[13].replace("\n", "")
+    msg_timer = float(lines[13].replace("\n", ""))
+    program_mode = lines[15].replace("\n", "")
 
     file.close()
 
     # 설정 출력
-    print("[SYSTEM] 초기 구성 완료.")
     print("[SYSTEM] Telegram Bot Token : " + my_token)
     print("[SYSTEM] Telegram Channel ID : " + channel_id)
     print("[SYSTEM] Start Timer : " + str(start_timer))
     print("[SYSTEM] Delay Timer : " + str(delay_timer))
+    print("[SYSTEM] 초기 구성 완료.")
     print("")
 
     # 웹드라이버 및 봇 초기화
-    driver = webdriver.Chrome(driver_location)
-    driver.get("https://www.upbit.com/trends")
     my_bot = telegram.Bot(token=my_token)
+    driver = webdriver.Chrome(driver_location)
+    driver.maximize_window()
+    driver.get("https://upbit.com/exchange?")
 
     # 프로그램 시작
     upbit_avail = []
@@ -198,8 +238,10 @@ if __name__ == "__main__":
         binance_init = False
 
     sleep(start_timer)
+    print("[SYSTEM] 페이지 준비 완료. ")
+    print("[SYSTEM] 프로세스 시작. ")
     while True:
+        sleep(delay_timer)
         upbit_init = coins_upbit(driver, my_bot, upbit_init)
         sleep(delay_timer)
         binance_init = coins_binance(my_bot, binance_init)
-        sleep(delay_timer)

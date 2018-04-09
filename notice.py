@@ -51,7 +51,7 @@ def notice_bithumb(driver, words):
         if result:
             break
 
-    print("[SYSTEM] bithumb 진행.")
+    #print("[SYSTEM] bithumb 진행.")
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
@@ -82,7 +82,7 @@ def notice_upbit(driver, words):
         if result:
             break
 
-    print("[SYSTEM] upbit 진행.")
+    #print("[SYSTEM] upbit 진행.")
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
@@ -114,7 +114,7 @@ def notice_binance(driver, words):
             break
 
     # console
-    print("[SYSTEM] binance 진행.")
+    #print("[SYSTEM] binance 진행.")
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
@@ -123,7 +123,7 @@ def notice_binance(driver, words):
 def message(bot, site, title, link):
     msg = msg_format.replace("$title", title).replace("$link", link).replace("$site", site).replace("%enter", "\n")
     bot.sendMessage(chat_id=channel_id, text=msg)
-    print("[SYSTEM] Telegram Message 전송 완료. (키워드 발견함.)")
+    #print("[SYSTEM] Telegram Message 전송 완료. (키워드 발견함.)")
 
 
 def loop(driver, bot, timer, words1, words2, words3):
