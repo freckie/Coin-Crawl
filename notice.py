@@ -4,6 +4,9 @@ from selenium import webdriver
 from time import sleep
 import json
 import telegram
+from datetime import datetime
+import logging
+from selenium.webdriver.remote.remote_connection import LOGGER
 
 # 전역변수
 my_token = ''
@@ -18,6 +21,12 @@ msg_format = ""
 start_timer = 15
 
 
+# [디버깅용] 현재 시간 스트링으로 리턴
+def _get_time():
+    now = datetime.now()
+    return str(now.hour) + ":" + str(now.minute) + ":" + str(now.second)
+
+
 # 문자열에 word_list가 있는지 확인 (text:string, word_list:list<string>)
 def _string_find(text, word_list):
     for word in word_list:
@@ -27,6 +36,8 @@ def _string_find(text, word_list):
 
 
 def notice_bithumb(driver, words):
+    logger.info("[SYSTEM] Bithumb 진행 시작.")
+
     url = "http://bithumb.cafe/notice"
     driver.get(url)
     html = driver.page_source
@@ -51,15 +62,17 @@ def notice_bithumb(driver, words):
         if result:
             break
 
-    #print("[SYSTEM] bithumb 진행.")
+    logger.info("[SYSTEM] Bithumb 진행 완료.")
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
 
 
 def notice_upbit(driver, words):
+    logger.info("[SYSTEM] UpBit 진행 시작.")
+
     # ID를 가져오기 위한 json parsing
-    headers = {"Content-Type":"application/json; charset=utf-8"}
+    headers = {"Content-Type": "application/json; charset=utf-8"}
     url = "https://api-manager.upbit.com/api/v1/notices?page=1"
     json_string = str(BeautifulSoup(requests.get(url, headers=headers).text, 'html.parser'))
     json_dict = json.loads(json_string)
@@ -71,6 +84,7 @@ def notice_upbit(driver, words):
     # 링크 들어가서 데이터 가져오기
     driver.get(post_link)
     html = driver.page_source
+    sleep(2)
     bs = BeautifulSoup(html, 'html.parser')
     article = bs.select("div#markdown_notice_body")[0]
     p_tags = article.find_all("p")
@@ -82,13 +96,15 @@ def notice_upbit(driver, words):
         if result:
             break
 
-    #print("[SYSTEM] upbit 진행.")
+    logger.info("[SYSTEM] UpBit 진행 완료.")
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
 
 
 def notice_binance(driver, words):
+    logger.info("[SYSTEM] Binance 진행 시작.")
+    
     url = "https://support.binance.com/hc/en-us/sections/115000202591-Latest-News"
     driver.get(url)
     html = driver.page_source
@@ -114,7 +130,7 @@ def notice_binance(driver, words):
             break
 
     # console
-    #print("[SYSTEM] binance 진행.")
+    logger.info("[SYSTEM] Binance 진행 완료.")
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
@@ -123,49 +139,48 @@ def notice_binance(driver, words):
 def message(bot, site, title, link):
     msg = msg_format.replace("$title", title).replace("$link", link).replace("$site", site).replace("%enter", "\n")
     bot.sendMessage(chat_id=channel_id, text=msg)
-    #print("[SYSTEM] Telegram Message 전송 완료. (키워드 발견함.)")
+    logger.info("[SYSTEM] Telegram Message 전송 완료. (키워드 발견함.)")
 
 
 def loop(driver, bot, timer, words1, words2, words3):
     url = "https://www.upbit.com/service_center/notice"
     driver.get(url)
-    print("[SYSTEM] upbit 브라우저 체킹 기다리는 중. (" + str(start_timer) + "sec 예정)")
+    logger.info("[SYSTEM] UpBit 브라우저 체킹 기다리는 중. (" + str(start_timer) + "sec 예정)")
     sleep(start_timer)
-    print("[SYSTEM] 프로세스 시작.")
+    logger.info("[SYSTEM] 프로세스 시작.")
 
     while True:
-        print("")
-        try:
-            data = notice_upbit(driver, words1)
-            # 단어 검색되었을 때
-            if data[2]:
-                # 이미 검색한 것이 아닐 때
-                if not already_checked['upbit'] == data[0]:
-                    already_checked['upbit'] = data[0]
-                    message(bot, "upbit", data[0], data[1])
-            sleep(timer)
+        #try:
+        data = notice_upbit(driver, words1)
+        # 단어 검색되었을 때
+        if data[2]:
+            # 이미 검색한 것이 아닐 때
+            if not already_checked['upbit'] == data[0]:
+                already_checked['upbit'] = data[0]
+                message(bot, "UpBit", data[0], data[1])
+        sleep(timer)
 
-            data = notice_bithumb(driver, words2)
-            # 단어 검색되었을 때
-            if data[2]:
-                # 이미 검색한 것이 아닐 때
-                if not already_checked['bithumb'] == data[0]:
-                    already_checked['bithumb'] = data[0]
-                    message(bot, "bithumb", data[0], data[1])
-            sleep(timer)
+        data = notice_bithumb(driver, words2)
+        # 단어 검색되었을 때
+        if data[2]:
+            # 이미 검색한 것이 아닐 때
+            if not already_checked['bithumb'] == data[0]:
+                already_checked['bithumb'] = data[0]
+                message(bot, "Bithumb", data[0], data[1])
+        sleep(timer)
 
-            data = notice_binance(driver, words3)
-            # 단어 검색되었을 때
-            if data[2]:
-                # 이미 검색한 것이 아닐 때
-                if not already_checked['binance'] == data[0]:
-                    already_checked['binance'] = data[0]
-                    message(bot, "binance", data[0], data[1])
-            sleep(timer)
+        data = notice_binance(driver, words3)
+        # 단어 검색되었을 때
+        if data[2]:
+            # 이미 검색한 것이 아닐 때
+            if not already_checked['binance'] == data[0]:
+                already_checked['binance'] = data[0]
+                message(bot, "Binance", data[0], data[1])
+        sleep(timer)
 
-        except:
-            print("Error.")
-            continue
+        '''except Exception as exc:
+            print("[" + _get_time() + "][ERROR] " + str(exc) + " error at loop()")
+            continue'''
 
 
 if __name__ == "__main__":
@@ -185,16 +200,28 @@ if __name__ == "__main__":
 
     file.close()
 
+    # Logger 초기화
+    logger = logging.getLogger('coin')
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
+    fileHandler = logging.FileHandler('./coin.log')
+    streamHandler = logging.StreamHandler()
+    fileHandler.setFormatter(formatter)
+    streamHandler.setFormatter(formatter)
+    logger.addHandler(fileHandler)
+    logger.addHandler(streamHandler)
+
     # 설정 출력
-    print("[SYSTEM] 초기 구성 완료.")
-    print("[SYSTEM] Telegram Bot Token : " + my_token)
-    print("[SYSTEM] Telegram Channel ID : " + channel_id)
-    print("[SYSTEM] Start Timer : " + str(start_timer))
-    print("[SYSTEM] Delay Timer : " + str(delay_timer))
-    print("")
+    logger.info("[SYSTEM] 페이지 준비 완료. ")
+    logger.info("[SYSTEM] Telegram Bot Token : " + my_token)
+    logger.info("[SYSTEM] Telegram Channel ID : " + channel_id)
+    logger.info("[SYSTEM] Start Timer : " + str(start_timer))
+    logger.info("[SYSTEM] Delay Timer : " + str(delay_timer))
+    logger.info("[SYSTEM] 초기 구성 완료.")
 
     # 웹드라이버 및 봇 초기화
     driver = webdriver.Chrome(driver_location)
+    LOGGER.setLevel(logging.CRITICAL)
     my_bot = telegram.Bot(token=my_token)
 
     # 프로그램 시작
