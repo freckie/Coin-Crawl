@@ -6,6 +6,8 @@ import json
 import telegram
 from datetime import datetime
 import logging
+import lxml
+import logging.handlers
 from selenium.webdriver.remote.remote_connection import LOGGER
 
 # 전역변수
@@ -36,101 +38,117 @@ def _string_find(text, word_list):
 
 
 def notice_bithumb(driver, words):
-    logger.info("[SYSTEM] Bithumb 진행 시작.")
+    try:
+        logger.info("Bithumb 진행 시작.")
 
-    url = "http://bithumb.cafe/notice"
-    driver.get(url)
-    html = driver.page_source
-    bs = BeautifulSoup(html, 'html.parser')
-    div = bs.select("div#primary-fullwidth")[0]
+        url = "http://bithumb.cafe/notice"
+        driver.get(url)
+        html = driver.page_source
+        bs = BeautifulSoup(html, 'lxml')
+        #div = bs.select("div#primary-fullwidth")[0]
+        div = bs.find("div", { "id": "primary-fullwidth"} )
 
-    # 최근 post만 가져오기
-    post = div.find_all("article")[0].select("h3 > a")[0]
+        # 최근 post만 가져오기
+        #post = div.find_all("article")[0].select("h3 > a")[0]
+        post = div.find_all("article")[0].find("h3").find("a")
 
-    # link, title 추출
-    post_link = post.get("href")
-    post_title = post.getText()
+        # link, title 추출
+        post_link = post.get("href")
+        post_title = post.getText()
 
-    # link로 들어가 단어 있는지 확인
-    new_bs = BeautifulSoup(requests.get(post_link).text, 'html.parser')
-    article = new_bs.select("div.entry-content")[0]
-    spans = article.find_all("span")
+        # link로 들어가 단어 있는지 확인
+        new_bs = BeautifulSoup(requests.get(post_link).text, 'lxml')
+        #article = new_bs.select("div.entry-content")[0]
+        article = new_bs.find("div", class_="entry-content")
+        spans = article.find_all("span")
 
-    result = False
-    for span in spans:
-        result = _string_find(span.getText(), words)
-        if result:
-            break
+        result = False
+        for span in spans:
+            result = _string_find(span.getText(), words)
+            if result:
+                break
 
-    logger.info("[SYSTEM] Bithumb 진행 완료.")
+    except AttributeError:
+        logger.info("Bithumb error.")
+        return ("", "", False)
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
 
 
 def notice_upbit(driver, words):
-    logger.info("[SYSTEM] UpBit 진행 시작.")
+    try:
+        logger.info("UpBit 진행 시작.")
 
-    # ID를 가져오기 위한 json parsing
-    headers = {"Content-Type": "application/json; charset=utf-8"}
-    url = "https://api-manager.upbit.com/api/v1/notices?page=1"
-    json_string = str(BeautifulSoup(requests.get(url, headers=headers).text, 'html.parser'))
-    json_dict = json.loads(json_string)
+        # ID를 가져오기 위한 json parsing
+        headers = {"Content-Type": "application/json; charset=utf-8"}
+        url = "https://api-manager.upbit.com/api/v1/notices?page=1"
+        html_code = BeautifulSoup(requests.get(url, headers=headers).text, 'lxml')
+        json_string = html_code.find("p").getText()
+        json_dict = json.loads(json_string)
 
-    post_id = json_dict["data"]["list"][0]["id"]
-    post_title = json_dict["data"]["list"][0]["title"]
-    post_link = "https://www.upbit.com/service_center/notice?id=" + str(post_id)
+        post_id = json_dict["data"]["list"][0]["id"]
+        post_title = json_dict["data"]["list"][0]["title"]
+        post_link = "https://www.upbit.com/service_center/notice?id=" + str(post_id)
 
-    # 링크 들어가서 데이터 가져오기
-    driver.get(post_link)
-    html = driver.page_source
-    sleep(2)
-    bs = BeautifulSoup(html, 'html.parser')
-    article = bs.select("div#markdown_notice_body")[0]
-    p_tags = article.find_all("p")
+        # 링크 들어가서 데이터 가져오기
+        driver.get(post_link)
+        html = driver.page_source
+        sleep(2)
+        bs = BeautifulSoup(html, 'lxml')
+        #article = bs.select("div#markdown_notice_body")[0]
+        article = bs.find("div", {"id": "markdown_notice_body"})
+        p_tags = article.find_all("p")
 
-    # 단어 확인
-    result = False
-    for p_tag in p_tags:
-        result = _string_find(p_tag.getText(), words)
-        if result:
-            break
+        # 단어 확인
+        result = False
+        for p_tag in p_tags:
+            result = _string_find(p_tag.getText(), words)
+            if result:
+                break
 
-    logger.info("[SYSTEM] UpBit 진행 완료.")
+    except AttributeError:
+        logger.info("Bithumb error.")
+        return ("", "", False)
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
 
 
 def notice_binance(driver, words):
-    logger.info("[SYSTEM] Binance 진행 시작.")
-    
-    url = "https://support.binance.com/hc/en-us/sections/115000202591-Latest-News"
-    driver.get(url)
-    html = driver.page_source
-    bs = BeautifulSoup(html, 'html.parser')
-    div = bs.select("ul.article-list")[0]
+    try:
+        logger.info("Binance 진행 시작.")
 
-    # 최근 post만 가져오기
-    post = div.find_all("li")[0].select("a")[0]
+        url = "https://support.binance.com/hc/en-us/sections/115000202591-Latest-News"
+        driver.get(url)
+        html = driver.page_source
+        bs = BeautifulSoup(html, 'lxml')
+        #div = bs.select("ul.article-list")[0]
+        div = bs.find("ul", class_='article-list')
 
-    # link, title 추출
-    post_link = "https://support.binance.com" + post.get("href")
-    post_title = post.getText()
+        # 최근 post만 가져오기
+        #post = div.find_all("li")[0].select("a")[0]
+        post = div.find_all("li")[0].find("a")
 
-    # link로 들어가 단어 있는지 확인
-    new_bs = BeautifulSoup(requests.get(post_link).text, 'html.parser')
-    article = new_bs.select("div.article-body")[0]
-    spans = article.find_all("span")
+        # link, title 추출
+        post_link = "https://support.binance.com" + post.get("href")
+        post_title = post.getText()
 
-    result = False
-    for span in spans:
-        result = _string_find(span.getText(), words)
-        if result:
-            break
+        # link로 들어가 단어 있는지 확인
+        new_bs = BeautifulSoup(requests.get(post_link).text, 'lxml')
+        #article = new_bs.select("div.article-body")[0]
+        article = new_bs.find("div", class_="article-body")
+        spans = article.find_all("span")
 
-    # console
-    logger.info("[SYSTEM] Binance 진행 완료.")
+        result = False
+        for span in spans:
+            result = _string_find(span.getText(), words)
+            if result:
+                break
+
+    except AttributeError:
+        logger.info("Bithumb error.")
+        return ("", "", False)
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
@@ -139,15 +157,17 @@ def notice_binance(driver, words):
 def message(bot, site, title, link):
     msg = msg_format.replace("$title", title).replace("$link", link).replace("$site", site).replace("%enter", "\n")
     bot.sendMessage(chat_id=channel_id, text=msg)
-    logger.info("[SYSTEM] Telegram Message 전송 완료. (키워드 발견함.)")
+    logger.info("Telegram Message 전송 완료. (키워드 발견함.)")
 
 
 def loop(driver, bot, timer, words1, words2, words3):
+    notice_init = False
+
     url = "https://www.upbit.com/service_center/notice"
     driver.get(url)
-    logger.info("[SYSTEM] UpBit 브라우저 체킹 기다리는 중. (" + str(start_timer) + "sec 예정)")
+    logger.info("UpBit 브라우저 체킹 기다리는 중. (" + str(start_timer) + "sec 예정)")
     sleep(start_timer)
-    logger.info("[SYSTEM] 프로세스 시작.")
+    logger.info("프로세스 시작.")
 
     while True:
         #try:
@@ -156,8 +176,10 @@ def loop(driver, bot, timer, words1, words2, words3):
         if data[2]:
             # 이미 검색한 것이 아닐 때
             if not already_checked['upbit'] == data[0]:
+                # 초기화된 상태일 때
+                if notice_init:
+                    message(bot, "UpBit", data[0], data[1])
                 already_checked['upbit'] = data[0]
-                message(bot, "UpBit", data[0], data[1])
         sleep(timer)
 
         data = notice_bithumb(driver, words2)
@@ -165,8 +187,10 @@ def loop(driver, bot, timer, words1, words2, words3):
         if data[2]:
             # 이미 검색한 것이 아닐 때
             if not already_checked['bithumb'] == data[0]:
+                # 초기화된 상태일 때
+                if notice_init:
+                    message(bot, "Bithumb", data[0], data[1])
                 already_checked['bithumb'] = data[0]
-                message(bot, "Bithumb", data[0], data[1])
         sleep(timer)
 
         data = notice_binance(driver, words3)
@@ -174,14 +198,18 @@ def loop(driver, bot, timer, words1, words2, words3):
         if data[2]:
             # 이미 검색한 것이 아닐 때
             if not already_checked['binance'] == data[0]:
+                # 초기화된 상태일 때
+                if notice_init:
+                    message(bot, "Binance", data[0], data[1])
                 already_checked['binance'] = data[0]
-                message(bot, "Binance", data[0], data[1])
         sleep(timer)
 
-        '''except Exception as exc:
-            print("[" + _get_time() + "][ERROR] " + str(exc) + " error at loop()")
-            continue'''
-
+        notice_init = True
+'''
+        except Exception as exc:
+            logger.info("[ERROR] " + str(exc) + " error at loop()")
+            continue
+'''
 
 if __name__ == "__main__":
     # 설정 데이터 읽기
@@ -201,10 +229,11 @@ if __name__ == "__main__":
     file.close()
 
     # Logger 초기화
+    fileMaxByte = 1024 * 1024 * 100  # 100MB
     logger = logging.getLogger('coin')
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
-    fileHandler = logging.FileHandler('./coin.log')
+    fileHandler = logging.handlers.RotatingFileHandler('./notice.log', maxBytes=fileMaxByte, backupCount=10)
     streamHandler = logging.StreamHandler()
     fileHandler.setFormatter(formatter)
     streamHandler.setFormatter(formatter)
@@ -212,12 +241,12 @@ if __name__ == "__main__":
     logger.addHandler(streamHandler)
 
     # 설정 출력
-    logger.info("[SYSTEM] 페이지 준비 완료. ")
-    logger.info("[SYSTEM] Telegram Bot Token : " + my_token)
-    logger.info("[SYSTEM] Telegram Channel ID : " + channel_id)
-    logger.info("[SYSTEM] Start Timer : " + str(start_timer))
-    logger.info("[SYSTEM] Delay Timer : " + str(delay_timer))
-    logger.info("[SYSTEM] 초기 구성 완료.")
+    logger.info("페이지 준비 완료. ")
+    logger.info("Telegram Bot Token : " + my_token)
+    logger.info("Telegram Channel ID : " + channel_id)
+    logger.info("Start Timer : " + str(start_timer))
+    logger.info("Delay Timer : " + str(delay_timer))
+    logger.info("초기 구성 완료.")
 
     # 웹드라이버 및 봇 초기화
     driver = webdriver.Chrome(driver_location)

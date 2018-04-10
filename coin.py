@@ -1,5 +1,6 @@
 import os
 import json
+import lxml
 import logging
 import requests
 import telegram
@@ -31,10 +32,10 @@ def _message(bot, site, message):
     msg = msg_format.replace("$message", message).replace("$site", site).replace("%enter", "\n")
     try:
         bot.sendMessage(chat_id=channel_id, text=msg)
-        logger.info("[SYSTEM] Telegram Message 전송 완료!")
+        logger.info("Telegram Message 전송 완료!")
         sleep(msg_timer)
-    except:
-        logger.info("[ERROR] Telegram Message 전송 실패!")
+    except Exception as exc:
+        logger.info("[ERROR] Telegram Message 전송 실패, error : " + str(exc))
 
 
 def _get_upbit_avail():
@@ -70,84 +71,72 @@ def _print_upbit_avail(upbit_avail):
 
 
 def coins_upbit(driver, bot, upbit_init):
-    logging.info("[SYSTEM] UpBit 진행 시작.")
-    driver.refresh()
+    logger.info("UpBit start.")
+    driver.get("https://upbit.com/exchange?")
     sleep(5)
 
     # 파일에 이전 데이터 읽어오기
-    upbit_avail = _get_upbit_avail()
+    avail = _get_upbit_avail()
     now_list_u = []
     now_list_u.clear()
 
     try:
-        logging.info("[SYSTEM] UpBit 에서 KRW 기반 크롤링 시작.")
-        bs = BeautifulSoup(driver.page_source, "html.parser")
+        bs = BeautifulSoup(driver.page_source, "lxml")
         div = bs.find("section", class_="ty02").find("div", class_="scrollB").find("table")
         trs = div.find_all("tr")
         for tr in trs:
             name = tr.find('td', class_='tit').find('a').get_text().strip()
             short = tr.find('td', class_='tit').find('em').get_text().strip()
-            temp = {
-                'name': name,
-                'symbol': short,
-            }
+            now_list_u.append(short)
+
             # 새로운 데이터라면
-            if temp['symbol'] not in upbit_avail:
+            if short not in avail:
                 # 초기화 중이 아니라면
                 if upbit_init:
-                    msg = temp['name'] + " (" + temp['symbol'] + ") 상장."
+                    msg = name + " (" + short + ") 상장."
                     _message(bot, "UpBit", msg)
-                    upbit_avail.append(temp['symbol'])
+                    avail.append(short)
                 else:
-                    upbit_avail.append(temp['symbol'])
-            now_list_u.append(temp['symbol'])
+                    avail.append(short)
 
-        logging.info("[SYSTEM] UpBit 에서 KRW 기반 크롤링 완료.")
-        
         driver.find_element_by_xpath('//*[@id="root"]/div/div/div[3]/section[2]/article[1]/span[2]/ul/li[2]/a').click()
 
         sleep(5)
 
-        logging.info("[SYSTEM] UpBit 에서 BTC 기반 크롤링 시작.")
-        bs = BeautifulSoup(driver.page_source, "html.parser")
+        bs = BeautifulSoup(driver.page_source, "lxml")
         div = bs.find("section", class_="ty02").find("div", class_="scrollB").find("table")
         trs = div.find_all("tr")
         for tr in trs:
             name = tr.find('td', class_='tit').find('a').get_text().strip()
             short = tr.find('td', class_='tit').find('em').get_text().strip()
-            temp = {
-                'name': name,
-                'symbol': short
-            }
+            now_list_u.append(short)
+
             # 새로운 데이터라면
-            if temp['symbol'] not in upbit_avail:
+            if short not in avail:
                 # 초기화 중이 아니라면
                 if upbit_init:
-                    msg = temp['name'] + " (" + temp['symbol'] + ") 상장."
+                    msg = name + " (" + short + ") 상장."
                     _message(bot, "UpBit", msg)
-                    upbit_avail.append(temp['symbol'])
+                    avail.append(short)
                 else:
-                    upbit_avail.append(temp['symbol'])
-            now_list_u.append(temp['symbol'])
-        logging.info("[SYSTEM] UpBit 에서 BTC 기반 크롤링 완료.")
+                    avail.append(short)
+
         sleep(5)
 
     except TimeoutException:
-        logging.info("[ERROR] Loading took too much time!")
-    except Exception as exc:
-        logging.info("[ERROR] " + str(exc) + "error.")
+        logger.info("[ERROR] Loading took too much time!")
 
+    # 파일에 데이터 저장
+    _print_upbit_avail(avail)
+    return True
+
+'''
     # 폐장된 데이터 확인
     del_data = list(set(upbit_avail).difference(set(now_list_u)))
     for iter in del_data:
         msg = iter + " 거래소에서 제외됨 (폐장)."
         _message(bot, "UpBit", msg)
-        upbit_avail.remove(str(iter))
-
-    # 파일에 데이터 저장
-    _print_upbit_avail(upbit_avail)
-    logging.info("[SYSTEM] UpBit 진행 완료.")
-    return True
+        upbit_avail.remove(str(iter))'''
 
 
 def _get_binance_avail():
@@ -183,7 +172,7 @@ def _print_binance_avail(binance_avail):
 
 
 def coins_binance(bot, _binance_init):
-    logging.info("[SYSTEM] Binance 진행 시작.")
+    logger.info("Binance start.")
     
     # 파일에 이전 데이터 가져오기
     _binance_avail = _get_binance_avail()
@@ -223,7 +212,6 @@ def coins_binance(bot, _binance_init):
         _binance_avail.remove(str(iter))
 
     _print_binance_avail(_binance_avail)
-    logging.info("[SYSTEM] Binance 진행 완료.")
     return True
 
 
@@ -248,10 +236,12 @@ if __name__ == "__main__":
     file.close()
 
     # Logger 초기화
+    fileMaxByte = 1024 * 1024 * 100  # 100MB
     logger = logging.getLogger('coin')
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
-    fileHandler = logging.FileHandler('./coin.log')
+    #fileHandler = logging.FileHandler('./coin.log')
+    fileHandler = logging.handlers.RotatingFileHandler('./coin.log', maxBytes=fileMaxByte, backupCount=10)
     streamHandler = logging.StreamHandler()
     fileHandler.setFormatter(formatter)
     streamHandler.setFormatter(formatter)
@@ -259,12 +249,12 @@ if __name__ == "__main__":
     logger.addHandler(streamHandler)
 
     # 설정 출력
-    logger.info("[SYSTEM] 페이지 준비 완료. ")
-    logger.info("[SYSTEM] Telegram Bot Token : " + my_token)
-    logger.info("[SYSTEM] Telegram Channel ID : " + channel_id)
-    logger.info("[SYSTEM] Start Timer : " + str(start_timer))
-    logger.info("[SYSTEM] Delay Timer : " + str(delay_timer))
-    logger.info("[SYSTEM] 초기 구성 완료.")
+    logger.info("페이지 준비 완료. ")
+    logger.info("Telegram Bot Token : " + my_token)
+    logger.info("Telegram Channel ID : " + channel_id)
+    logger.info("Start Timer : " + str(start_timer))
+    logger.info("Delay Timer : " + str(delay_timer))
+    logger.info("초기 구성 완료.")
 
     # 웹드라이버 및 봇 초기화
     my_bot = telegram.Bot(token=my_token)
@@ -285,10 +275,13 @@ if __name__ == "__main__":
         binance_init = False
 
     sleep(start_timer)
-    logger.info("[SYSTEM] 페이지 준비 완료. ")
-    logger.info("[SYSTEM] 프로세스 시작. ")
+    logger.info("페이지 준비 완료. ")
+    logger.info("프로세스 시작. ")
     while True:
-        sleep(delay_timer)
-        upbit_init = coins_upbit(driver, my_bot, upbit_init)
-        sleep(delay_timer)
-        binance_init = coins_binance(my_bot, binance_init)
+        try:
+            upbit_init = coins_upbit(driver, my_bot, upbit_init)
+            sleep(delay_timer)
+            binance_init = coins_binance(my_bot, binance_init)
+            sleep(delay_timer)
+        except Exception as exc:
+            logger.info("[ERROR] " + str(exc))
