@@ -14,7 +14,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.remote.remote_connection import LOGGER
 
 my_token = ''
-channel_id = ''
+channel_list = ''
 driver_location = ""
 delay_timer = 10
 msg_format = ""
@@ -30,12 +30,13 @@ def _get_time():
 
 def _message(bot, site, message):
     msg = msg_format.replace("$message", message).replace("$site", site).replace("%enter", "\n")
-    try:
-        bot.sendMessage(chat_id=channel_id, text=msg)
-        logger.info("Telegram Message 전송 완료!")
-        sleep(msg_timer)
-    except Exception as exc:
-        logger.info("[ERROR] Telegram Message 전송 실패, error : " + str(exc))
+    for id in channel_list:
+        try:
+            bot.sendMessage(chat_id=id, text=msg)
+            logger.info("Telegram Message Sent!")
+            sleep(msg_timer)
+        except Exception as exc:
+            logger.info("[ERROR] Telegram Message sending error, error : " + str(exc))
 
 
 def _get_upbit_avail():
@@ -228,6 +229,7 @@ if __name__ == "__main__":
     driver_location = lines[1].replace("\n", "")
     my_token = lines[3].replace("\n", "")
     channel_id = lines[5].replace("\n", "")
+    channel_list = channel_id.split(" ")
     delay_timer = int(lines[7].replace("\n", ""))
     msg_format = lines[9]
     start_timer = int(lines[11].replace("\n", ""))

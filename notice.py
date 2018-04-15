@@ -12,7 +12,7 @@ from selenium.webdriver.remote.remote_connection import LOGGER
 
 # 전역변수
 my_token = ''
-channel_id = ''
+channel_list = ''
 already_checked = {'bithumb':'', 'upbit':'', 'binance':''} # 이미 체크한 공지들
 driver_location = ""
 word_upbit = []
@@ -21,6 +21,13 @@ word_binance = []
 delay_timer = 10
 msg_format = ""
 start_timer = 15
+
+
+def message(bot, site, title, link):
+    msg = msg_format.replace("$title", title).replace("$link", link).replace("$site", site).replace("%enter", "\n")
+    for id in channel_list:
+        bot.sendMessage(chat_id=id, text=msg)
+    logger.info("Telegram Message 전송 완료. (키워드 발견함.)")
 
 
 # [디버깅용] 현재 시간 스트링으로 리턴
@@ -39,14 +46,14 @@ def _string_find(text, word_list):
 
 def notice_bithumb(driver, words):
     try:
-        logger.info("Bithumb 진행 시작.")
+        logger.info("Bithumb Start.")
 
         url = "http://bithumb.cafe/notice"
         driver.get(url)
         html = driver.page_source
         bs = BeautifulSoup(html, 'lxml')
         #div = bs.select("div#primary-fullwidth")[0]
-        div = bs.find("div", { "id": "primary-fullwidth"} )
+        div = bs.find("div", {"id": "primary-fullwidth"} )
 
         # 최근 post만 가져오기
         #post = div.find_all("article")[0].select("h3 > a")[0]
@@ -69,7 +76,7 @@ def notice_bithumb(driver, words):
                 break
 
     except AttributeError:
-        logger.info("Bithumb error.")
+        logger.info("Bithumb not found.")
         return ("", "", False)
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
@@ -78,7 +85,7 @@ def notice_bithumb(driver, words):
 
 def notice_upbit(driver, words):
     try:
-        logger.info("UpBit 진행 시작.")
+        logger.info("UpBit Start.")
 
         # ID를 가져오기 위한 json parsing
         headers = {"Content-Type": "application/json; charset=utf-8"}
@@ -108,7 +115,7 @@ def notice_upbit(driver, words):
                 break
 
     except AttributeError:
-        logger.info("Bithumb error.")
+        logger.info("UpBit not found.")
         return ("", "", False)
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
@@ -117,7 +124,7 @@ def notice_upbit(driver, words):
 
 def notice_binance(driver, words):
     try:
-        logger.info("Binance 진행 시작.")
+        logger.info("Binance Start.")
 
         url = "https://support.binance.com/hc/en-us/sections/115000202591-Latest-News"
         driver.get(url)
@@ -147,17 +154,11 @@ def notice_binance(driver, words):
                 break
 
     except AttributeError:
-        logger.info("Bithumb error.")
+        logger.info("Binance not found.")
         return ("", "", False)
 
     # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
     return (post_title, post_link, result)
-
-
-def message(bot, site, title, link):
-    msg = msg_format.replace("$title", title).replace("$link", link).replace("$site", site).replace("%enter", "\n")
-    bot.sendMessage(chat_id=channel_id, text=msg)
-    logger.info("Telegram Message 전송 완료. (키워드 발견함.)")
 
 
 def loop(driver, bot, timer, words1, words2, words3):
@@ -219,6 +220,7 @@ if __name__ == "__main__":
     driver_location = lines[1].replace("\n", "")
     my_token = lines[3].replace("\n", "")
     channel_id = lines[5].replace("\n", "")
+    channel_list = channel_id.split(" ")
     word_upbit = lines[7].replace("\n", "").split(" ")
     word_bithumb = lines[9].replace("\n", "").split(" ")
     word_binance = lines[11].replace("\n", "").split(" ")
