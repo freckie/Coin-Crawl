@@ -2,18 +2,18 @@ from bs4 import BeautifulSoup
 import requests
 from selenium import webdriver
 from time import sleep
+import time
 import json
 import telegram
 from datetime import datetime
-import logging
-import lxml
 import logging.handlers
 from selenium.webdriver.remote.remote_connection import LOGGER
+import sys
 
 # 전역변수
 my_token = ''
 channel_list = ''
-already_checked = {'bithumb':'', 'upbit':'', 'binance':''} # 이미 체크한 공지들
+already_checked = {'bithumb': '', 'upbit': '', 'binance1': '', 'binance2': ''} # 이미 체크한 공지들
 driver_location = ""
 word_upbit = []
 word_bithumb = []
@@ -25,9 +25,13 @@ start_timer = 15
 
 def message(bot, site, title, link):
     msg = msg_format.replace("$title", title).replace("$link", link).replace("$site", site).replace("%enter", "\n")
-    for id in channel_list:
-        bot.sendMessage(chat_id=id, text=msg)
-    logger.info("Telegram Message 전송 완료. (키워드 발견함.)")
+    try:
+        for id in channel_list:
+            bot.sendMessage(chat_id=id, text=msg)
+        logger.info("Telegram Message Sent!")
+    except Exception as exc:
+        logger.info("[ERROR] Telegram Message sending error, error : " + str(exc))
+
 
 
 # [디버깅용] 현재 시간 스트링으로 리턴
@@ -161,7 +165,45 @@ def notice_binance(driver, words):
     return (post_title, post_link, result)
 
 
+def notice_binance2(driver, words):
+    try:
+        logger.info("Binance_NewListings Start.")
+
+        url = "https://support.binance.com/hc/en-us/sections/115000106672-New-Listings"
+        driver.get(url)
+        html = driver.page_source
+        bs = BeautifulSoup(html, 'lxml')
+        div = bs.find("ul", class_='article-list')
+
+        # 최근 post만 가져오기
+        post = div.find_all("li")[0].find("a")
+
+        # link, title 추출
+        post_link = "https://support.binance.com" + post.get("href")
+        post_title = post.getText()
+
+        # link로 들어가 단어 있는지 확인
+        new_bs = BeautifulSoup(requests.get(post_link).text, 'lxml')
+        article = new_bs.find("div", class_="article-body")
+        spans = article.find_all("span")
+
+        result = False
+        for span in spans:
+            result = _string_find(span.getText(), words)
+            if result:
+                break
+
+    except AttributeError:
+        logger.info("Binance_NewListings not found.")
+        return ("", "", False)
+
+    # 리턴용 데이터 (제목, 링크, 단어검색성공여부)
+    return (post_title, post_link, result)
+
+
 def loop(driver, bot, timer, words1, words2, words3):
+    started_time = time.time()
+
     notice_init = False
 
     url = "https://www.upbit.com/service_center/notice"
@@ -171,50 +213,74 @@ def loop(driver, bot, timer, words1, words2, words3):
     logger.info("프로세스 시작.")
 
     while True:
-        #try:
-        data = notice_upbit(driver, words1)
-        # 단어 검색되었을 때
-        if data[2]:
-            # 이미 검색한 것이 아닐 때
-            if not already_checked['upbit'] == data[0]:
-                # 초기화된 상태일 때
-                if notice_init:
-                    message(bot, "UpBit", data[0], data[1])
-                already_checked['upbit'] = data[0]
-        sleep(timer)
+        try:
+            # 86400(24시간) - 180(3분) 이 지나면 프로그램 종료
+            passed_time = time.time() - started_time
+            if passed_time > 86220:
+                logger.info("프로그램이 3초 후 종료됩니다.")
+                sleep(3)
+                sys.exit(1)
 
-        data = notice_bithumb(driver, words2)
-        # 단어 검색되었을 때
-        if data[2]:
-            # 이미 검색한 것이 아닐 때
-            if not already_checked['bithumb'] == data[0]:
-                # 초기화된 상태일 때
-                if notice_init:
-                    message(bot, "Bithumb", data[0], data[1])
-                already_checked['bithumb'] = data[0]
-        sleep(timer)
+            data = notice_upbit(driver, words1)
+            # 단어 검색되었을 때
+            if data[2]:
+                # 이미 검색한 것이 아닐 때
+                if not already_checked['upbit'] == data[0]:
+                    # 초기화된 상태일 때
+                    if notice_init:
+                        message(bot, "UpBit", data[0], data[1])
+                    already_checked['upbit'] = data[0]
+            sleep(timer)
 
-        data = notice_binance(driver, words3)
-        # 단어 검색되었을 때
-        if data[2]:
-            # 이미 검색한 것이 아닐 때
-            if not already_checked['binance'] == data[0]:
-                # 초기화된 상태일 때
-                if notice_init:
-                    message(bot, "Binance", data[0], data[1])
-                already_checked['binance'] = data[0]
-        sleep(timer)
+            data = notice_bithumb(driver, words2)
+            # 단어 검색되었을 때
+            if data[2]:
+                # 이미 검색한 것이 아닐 때
+                if not already_checked['bithumb'] == data[0]:
+                    # 초기화된 상태일 때
+                    if notice_init:
+                        message(bot, "Bithumb", data[0], data[1])
+                    already_checked['bithumb'] = data[0]
+            sleep(timer)
 
-        notice_init = True
-'''
+            data = notice_binance(driver, words3)
+            # 단어 검색되었을 때
+            if data[2]:
+                # 이미 검색한 것이 아닐 때
+                if not already_checked['binance'] == data[0]:
+                    # 초기화된 상태일 때
+                    if notice_init:
+                        message(bot, "Binance", data[0], data[1])
+                    already_checked['binance'] = data[0]
+            sleep(timer)
+
+            data = notice_binance2(driver, words3)
+            # 단어 검색되었을 때
+            if data[2]:
+                # 이미 검색한 것이 아닐 때
+                if not already_checked['binance2'] == data[0]:
+                    # 초기화된 상태일 때
+                    if notice_init:
+                        message(bot, "Binance", data[0], data[1])
+                    already_checked['binance2'] = data[0]
+            sleep(timer)
+
+            notice_init = True
+
         except Exception as exc:
-            logger.info("[ERROR] " + str(exc) + " error at loop()")
-            continue
-'''
+            logger.info("[ERROR] loop unknown error." + str(exc))
+
 
 if __name__ == "__main__":
+    file_name = "./notice_setting.ini"
+    driver_location = "./chromedriver.exe"
+
+    if len(sys.argv) > 1:
+        file_name = sys.argv[1]
+        driver_location = sys.argv[2]
+
     # 설정 데이터 읽기
-    file = open("notice_setting.ini", 'r')
+    file = open(file_name, 'r')
     lines = file.readlines()
 
     driver_location = lines[1].replace("\n", "")
@@ -243,7 +309,8 @@ if __name__ == "__main__":
     logger.addHandler(streamHandler)
 
     # 설정 출력
-    logger.info("페이지 준비 완료. ")
+    logger.info("Ini file Location : " + file_name)
+    logger.info("Driver Location : " + driver_location)
     logger.info("Telegram Bot Token : " + my_token)
     logger.info("Telegram Channel ID : " + channel_id)
     logger.info("Start Timer : " + str(start_timer))
@@ -254,6 +321,8 @@ if __name__ == "__main__":
     driver = webdriver.Chrome(driver_location)
     LOGGER.setLevel(logging.CRITICAL)
     my_bot = telegram.Bot(token=my_token)
+    driver.set_window_size(0, 0)
+    logger.info("페이지 준비 완료. ")
 
     # 프로그램 시작
     loop(driver, my_bot, delay_timer, word_upbit, word_bithumb, word_binance)

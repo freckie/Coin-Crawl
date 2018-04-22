@@ -1,7 +1,7 @@
 import os
+import sys
+import time
 import json
-import lxml
-import logging
 import requests
 import telegram
 import logging.handlers
@@ -182,7 +182,7 @@ def coins_binance(bot, _binance_init):
     # ID를 가져오기 위한 json parsing
     headers = {"Content-Type": "application/json; charset=utf-8"}
     url = "https://www.binance.com/exchange/public/product"
-    json_string = str(BeautifulSoup(requests.get(url, headers=headers).text, 'html.parser'))
+    json_string = str(BeautifulSoup(requests.get(url, headers=headers).text, 'lxml').find("p").getText())
     json_data = json.loads(json_string)['data']
 
     for data in json_data:
@@ -222,8 +222,15 @@ if __name__ == "__main__":
     if os.path.exists("binance_coins.dat"):
         os.remove('binance_coins.dat')
 
+    file_name = "./notice_setting.ini"
+    driver_location = "./chromedriver.exe"
+
+    if len(sys.argv) > 1:
+        file_name = sys.argv[1]
+        driver_location = sys.argv[2]
+
     # 설정 데이터 읽기
-    file = open("coin_setting.ini", 'r')
+    file = open(file_name, 'r')
     lines = file.readlines()
 
     driver_location = lines[1].replace("\n", "")
@@ -251,7 +258,8 @@ if __name__ == "__main__":
     logger.addHandler(streamHandler)
 
     # 설정 출력
-    logger.info("페이지 준비 완료. ")
+    logger.info("Ini file Location : " + file_name)
+    logger.info("Driver Location : " + driver_location)
     logger.info("Telegram Bot Token : " + my_token)
     logger.info("Telegram Channel ID : " + channel_id)
     logger.info("Start Timer : " + str(start_timer))
@@ -279,7 +287,15 @@ if __name__ == "__main__":
     sleep(start_timer)
     logger.info("페이지 준비 완료. ")
     logger.info("프로세스 시작. ")
+    started_time = time.time()
     while True:
+        # 86400(24시간) - 180(3분) 이 지나면 프로그램 종료
+        passed_time = time.time() - started_time
+        if passed_time > 86220:
+            logger.info("프로그램 실행 23시간 57분 경과. 프로그램이 3초 후 종료됩니다.")
+            sleep(3)
+            sys.exit(1)
+
         try:
             upbit_init = coins_upbit(driver, my_bot, upbit_init)
             sleep(delay_timer)
