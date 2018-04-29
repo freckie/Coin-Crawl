@@ -250,11 +250,11 @@ if __name__ == "__main__":
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
     #fileHandler = logging.FileHandler('./coin.log')
-    fileHandler = logging.handlers.RotatingFileHandler('./coin.log', maxBytes=fileMaxByte, backupCount=10)
+    #fileHandler = logging.handlers.RotatingFileHandler('./coin.log', maxBytes=fileMaxByte, backupCount=10)
     streamHandler = logging.StreamHandler()
-    fileHandler.setFormatter(formatter)
+    #fileHandler.setFormatter(formatter)
     streamHandler.setFormatter(formatter)
-    logger.addHandler(fileHandler)
+    #logger.addHandler(fileHandler)
     logger.addHandler(streamHandler)
 
     # 설정 출력
@@ -294,7 +294,7 @@ if __name__ == "__main__":
         if passed_time > 86220:
             logger.info("프로그램 실행 23시간 57분 경과. 프로그램이 3초 후 종료됩니다.")
             sleep(3)
-            sys.exit(1)
+            os._exit(1)
 
         try:
             upbit_init = coins_upbit(driver, my_bot, upbit_init)

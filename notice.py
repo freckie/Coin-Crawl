@@ -217,9 +217,9 @@ def loop(driver, bot, timer, words1, words2, words3):
             # 86400(24시간) - 180(3분) 이 지나면 프로그램 종료
             passed_time = time.time() - started_time
             if passed_time > 86220:
-                logger.info("프로그램이 3초 후 종료됩니다.")
+                logger.info("프로그램 실행 시간 23시간 57분 경과. 프로그램이 3초 후 종료됩니다.")
                 sleep(3)
-                sys.exit(1)
+                os._exit(1)
 
             data = notice_upbit(driver, words1)
             # 단어 검색되었을 때
@@ -301,11 +301,11 @@ if __name__ == "__main__":
     logger = logging.getLogger('coin')
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter('[%(levelname)s|%(filename)s:%(lineno)s] %(asctime)s > %(message)s')
-    fileHandler = logging.handlers.RotatingFileHandler('./notice.log', maxBytes=fileMaxByte, backupCount=10)
+    #fileHandler = logging.handlers.RotatingFileHandler('./notice.log', maxBytes=fileMaxByte, backupCount=10)
     streamHandler = logging.StreamHandler()
-    fileHandler.setFormatter(formatter)
+    #fileHandler.setFormatter(formatter)
     streamHandler.setFormatter(formatter)
-    logger.addHandler(fileHandler)
+    #logger.addHandler(fileHandler)
     logger.addHandler(streamHandler)
 
     # 설정 출력
